@@ -60,9 +60,18 @@ public class OnixReader {
 			headersCollection.insert(new BasicDBObject("item", JSON.parse(headerWriter.toString())).append("_id", id));
 			
 			for (Product product : products) {
+				int newVersion = 0;
+				DBCursor version = productsCollection.find(new BasicDBObject("item.Product.RecordReference", product.getRecordReference().getValue()))
+								.sort(new BasicDBObject("VERSION", -1)).limit(1);
+				if(version.size() > 0) {
+					newVersion = Integer.valueOf(JSON.serialize(version.next().get("VERSION"))) + 1;
+				} else {
+					newVersion = 0;
+				}
 				StringWriter productWriter = new StringWriter();			
 				marshaller.marshal(product, productWriter);
-				productsCollection.insert(new BasicDBObject("item", JSON.parse(productWriter.toString())).append("refer", id));
+				productsCollection.insert(new BasicDBObject("item", JSON.parse(productWriter.toString()))
+											.append("VERSION", newVersion).append("refer", id));
 			}			
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -124,6 +133,50 @@ public class OnixReader {
 		}
 		
 		return Response.ok(new GenericEntity<List<ONIXMessage>>(messages){	}).build();
+	}
+	
+	@GET
+	@Path("products/{reference}")
+	@Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+	public Response getProductByReference(@PathParam("reference") String reference) {
+		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
+		
+		DBCursor productRecord = productsCollection.find(new BasicDBObject("item.Product.RecordReference", reference))
+												   .sort(new BasicDBObject("VERSION", -1)).limit(1);
+		if (productRecord.hasNext()) {
+			Product product = null;
+			try {
+				product = (Product)getUnmarshaller().unmarshal(new StringReader(JSON.serialize(productRecord.next().get("item"))));
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return Response.ok(product).build();
+		} else {
+			return Response.status(Status.NOT_FOUND).build();
+		}
+	}
+	@GET
+	@Path("products/{reference}/history")
+	@Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
+	public Response getProductByReferenceWithHistory(@PathParam("reference") String reference) {
+		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
+		
+		DBCursor productRecords = productsCollection.find(new BasicDBObject("item.Product.RecordReference", reference))
+													.sort(new BasicDBObject("VERSION", -1));
+		List<Product> products = new ArrayList<Product>();;
+		if (productRecords.size() != 0) {
+			while(productRecords.hasNext()) {
+				DBObject productRecord = productRecords.next();
+				try {
+					products.add((Product)getUnmarshaller().unmarshal(new StringReader(JSON.serialize(productRecord.get("item")))));
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+			return Response.ok(new GenericEntity<List<Product>>(products){	}).build();
+		} else {
+			return Response.status(Status.NOT_FOUND).build();
+		}
 	}
 	
 	private Unmarshaller getUnmarshaller() throws Exception {
