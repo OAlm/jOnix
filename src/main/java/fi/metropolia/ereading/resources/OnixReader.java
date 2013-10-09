@@ -61,7 +61,20 @@ public class OnixReader {
 			
 			for (Product product : products) {
 				if (product.getNotificationType().getValue().equals("05")) {
-					productsCollection.remove(new BasicDBObject("item.Product.RecordReference", product.getRecordReference().getValue()));
+					DBCursor cursor = productsCollection.find(new BasicDBObject("item.Product.RecordReference", 
+															  product.getRecordReference().getValue()));
+					while(cursor.hasNext()) {
+						DBObject temp = cursor.next();						
+						DBCursor toRemoveCursor = productsCollection.find(new BasicDBObject("refer", temp.get("refer")));
+						if (toRemoveCursor.size() == 1) {
+							productsCollection.remove(temp);
+							headersCollection.remove(new BasicDBObject("_id", temp.get("refer")));
+						} else {
+							productsCollection.remove(temp);
+						}
+					}					
+					headersCollection.remove(new BasicDBObject("_id", id));
+					
 				} else if (product.getNotificationType().getValue().equals("01") || product.getNotificationType().getValue().equals("02")
 						|| product.getNotificationType().getValue().equals("03")) {
 					int newVersion = 0;
@@ -138,8 +151,6 @@ public class OnixReader {
 								  new BasicDBObject("$set", 
 										  			new BasicDBObject("item.Product.ProductSupply", JSON.parse(productWriter.toString()))));
 					}						
-				} else {
-					return Response.status(Status.NOT_ACCEPTABLE).entity("Notification Type Code not Supported!").build();					
 				} 				
 			}			
 		} catch (Exception e) {

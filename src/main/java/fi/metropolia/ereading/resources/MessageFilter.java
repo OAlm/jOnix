@@ -30,6 +30,11 @@ public class MessageFilter {
 			if(product.getProductIdentifier().size() == 0) {
 				throw new Exception("Every product should have at least one Product Identifier!");
 			}			
+			if(!product.getNotificationType().getValue().equals("03") && !product.getNotificationType().getValue().equals("02") 
+					&& !product.getNotificationType().getValue().equals("01") && !product.getNotificationType().getValue().equals("04")
+					&& !product.getNotificationType().getValue().equals("05")) {
+				throw new Exception("Notification Type code is not supported!");
+			}
 		}
 		
 	}		
