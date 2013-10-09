@@ -60,23 +60,91 @@ public class OnixReader {
 			headersCollection.insert(new BasicDBObject("item", JSON.parse(headerWriter.toString())).append("_id", id));
 			
 			for (Product product : products) {
-				int newVersion = 0;
-				DBCursor version = productsCollection.find(new BasicDBObject("item.Product.RecordReference", product.getRecordReference().getValue()))
-								.sort(new BasicDBObject("VERSION", -1)).limit(1);
-				if(version.size() > 0) {
-					newVersion = Integer.valueOf(JSON.serialize(version.next().get("VERSION"))) + 1;
+				if (product.getNotificationType().getValue().equals("05")) {
+					productsCollection.remove(new BasicDBObject("item.Product.RecordReference", product.getRecordReference().getValue()));
+				} else if (product.getNotificationType().getValue().equals("01") || product.getNotificationType().getValue().equals("02")
+						|| product.getNotificationType().getValue().equals("03")) {
+					int newVersion = 0;
+					DBCursor version = productsCollection.find(new BasicDBObject("item.Product.RecordReference", 
+																product.getRecordReference().getValue()))
+														 .sort(new BasicDBObject("VERSION", -1)).limit(1);
+					if(version.size() > 0) {
+						newVersion = Integer.valueOf(JSON.serialize(version.next().get("VERSION"))) + 1;
+					} else {
+						newVersion = 0;
+					}
+					StringWriter productWriter = new StringWriter();			
+					marshaller.marshal(product, productWriter);
+					productsCollection.insert(new BasicDBObject("item", JSON.parse(productWriter.toString()))
+												.append("VERSION", newVersion).append("refer", id));
+				} else if (product.getNotificationType().getValue().equals("04")) {
+					
+					int newVersion = 0;
+					DBObject updatedProduct = null;
+					
+					DBCursor version = productsCollection.find(new BasicDBObject("item.Product.RecordReference", 
+																product.getRecordReference().getValue()))
+														 .sort(new BasicDBObject("VERSION", -1)).limit(1);
+					if(version.size() > 0) {
+						updatedProduct = version.next();
+						newVersion = Integer.valueOf(JSON.serialize(updatedProduct.get("VERSION"))) + 1;
+					} else {
+						newVersion = 0;
+					}	
+					
+					BasicDBObject insertedUpdate = new BasicDBObject("item", updatedProduct.get("item")).append("VERSION", newVersion)
+													.append("refer", id);
+					productsCollection.insert(insertedUpdate);
+					
+					if(product.getDescriptiveDetail() != null) {
+						StringWriter productWriter = new StringWriter();
+						marshaller.marshal(product.getDescriptiveDetail(), productWriter);
+						productsCollection.update(new BasicDBObject("_id", id), 
+												  new BasicDBObject("$set", 
+														  			new BasicDBObject("item.Product.DescriptiveDetail", JSON.parse(productWriter.toString()))));
+					}
+					if(product.getCollateralDetail() != null) {
+						StringWriter productWriter = new StringWriter();
+						marshaller.marshal(product.getCollateralDetail(), productWriter);
+						productsCollection.update(new BasicDBObject("_id", id), 
+								  new BasicDBObject("$set", 
+										  			new BasicDBObject("item.Product.CollateralDetail", JSON.parse(productWriter.toString()))));
+					}
+					if(product.getContentDetail() != null) {
+						StringWriter productWriter = new StringWriter();
+						marshaller.marshal(product.getContentDetail(), productWriter);
+						productsCollection.update(new BasicDBObject("_id", id), 
+								  new BasicDBObject("$set", 
+										  			new BasicDBObject("item.Product.ContentDetail", JSON.parse(productWriter.toString()))));
+					}
+					if(product.getPublishingDetail() != null) {
+						StringWriter productWriter = new StringWriter();
+						marshaller.marshal(product.getPublishingDetail(), productWriter);
+						productsCollection.update(new BasicDBObject("_id", id), 
+								  new BasicDBObject("$set", 
+										  			new BasicDBObject("item.Product.PublishingDetail", JSON.parse(productWriter.toString()))));
+					}
+					if(product.getRelatedMaterial() != null) {
+						StringWriter productWriter = new StringWriter();
+						marshaller.marshal(product.getRelatedMaterial(), productWriter);
+						productsCollection.update(new BasicDBObject("_id", id), 
+								  new BasicDBObject("$set", 
+										  			new BasicDBObject("item.Product.RelatedMaterial", JSON.parse(productWriter.toString()))));
+					}
+					if(product.getProductSupply() != null) {
+						StringWriter productWriter = new StringWriter();
+						marshaller.marshal(product.getProductSupply(), productWriter);
+						productsCollection.update(new BasicDBObject("_id", id), 
+								  new BasicDBObject("$set", 
+										  			new BasicDBObject("item.Product.ProductSupply", JSON.parse(productWriter.toString()))));
+					}						
 				} else {
-					newVersion = 0;
-				}
-				StringWriter productWriter = new StringWriter();			
-				marshaller.marshal(product, productWriter);
-				productsCollection.insert(new BasicDBObject("item", JSON.parse(productWriter.toString()))
-											.append("VERSION", newVersion).append("refer", id));
+					return Response.status(Status.NOT_ACCEPTABLE).entity("Notification Type Code not Supported!").build();					
+				} 				
 			}			
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
-				
+		}				
 		return Response.status(Status.ACCEPTED).build();	
 	}
 	
@@ -130,8 +198,7 @@ public class OnixReader {
 				}
 			}
 			messages.add(message);
-		}
-		
+		}		
 		return Response.ok(new GenericEntity<List<ONIXMessage>>(messages){	}).build();
 	}
 	
