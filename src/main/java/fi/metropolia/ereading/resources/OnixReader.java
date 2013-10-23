@@ -38,10 +38,15 @@ public class OnixReader {
 	@POST
 	@Path("/send")
 	@Consumes(MediaType.APPLICATION_XML)
-	public Response submitONIX(ONIXMessage message) {			
+	public Response submitONIX(ONIXMessage message, @QueryParam("key") String key) {	
+		
+		if (key == null || mongo.getDB("jOnix").getCollection("users").getCount(new BasicDBObject("key", key)) == 0) {
+			return Response.status(Status.UNAUTHORIZED).build();
+		}
+		
 		DBCollection headersCollection = mongo.getDB("jOnix").getCollection("headers");
 		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
-		
+				
 		try {
 			MessageFilter.filter(message);			
 		} catch(Exception ex) {
@@ -72,8 +77,9 @@ public class OnixReader {
 						} else {
 							productsCollection.remove(temp);
 						}
-					}					
-					headersCollection.remove(new BasicDBObject("_id", id));
+					}	
+					// removes the entry which has just bee ncreated by the same query
+					headersCollection.remove(new BasicDBObject("_id", id)); 
 					
 				} else if (product.getNotificationType().getValue().equals("01") || product.getNotificationType().getValue().equals("02")
 						|| product.getNotificationType().getValue().equals("03")) {
