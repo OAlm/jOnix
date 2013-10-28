@@ -4,4 +4,7 @@
 
 <web-app>
   <display-name>Archetype Created Web Application</display-name>
+  <listener>
+	  <listener-class>fi.metropolia.ereading.background.BusRegistrator</listener-class>
+  </listener>
 </web-app>
