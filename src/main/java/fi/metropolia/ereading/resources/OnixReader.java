@@ -3,6 +3,8 @@ package fi.metropolia.ereading.resources;
 import java.io.*;
 import java.util.*;
 
+import javax.annotation.ManagedBean;
+import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.*;
 import javax.ws.rs.core.Response.Status;
@@ -16,11 +18,17 @@ import org.editeur.ns.onix._3_0.reference.*;
 import com.mongodb.*;
 import com.mongodb.util.JSON;
 
+import fi.metropolia.ereading.background.BusFactory;
+import fi.metropolia.ereading.background.Outlet;
+
 @Path("/")
+@ManagedBean
 public class OnixReader {
 	
 	private static MongoClient mongo;
 	private static JAXBContext jsonContext;
+	@Inject
+	private BusFactory factory;
 	
 	static {
 		try {
@@ -39,19 +47,18 @@ public class OnixReader {
 	@Path("/send")
 	@Consumes(MediaType.APPLICATION_XML)
 	public Response submitONIX(ONIXMessage message, @QueryParam("key") String key) {	
-		
+		/* exits if the message is sent without any authorization keys */
 		if (key == null || mongo.getDB("jOnix").getCollection("users").getCount(new BasicDBObject("key", key)) == 0) {
 			return Response.status(Status.UNAUTHORIZED).build();
-		}
-		
-		DBCollection headersCollection = mongo.getDB("jOnix").getCollection("headers");
-		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
-				
+		} 				
+		/* filters the messages that are not properly made */		
 		try {
 			MessageFilter.filter(message);			
 		} catch(Exception ex) {
 			return Response.status(Status.NOT_ACCEPTABLE).entity(ex.getMessage()).build();
 		}
+		DBCollection headersCollection = mongo.getDB("jOnix").getCollection("headers");
+		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
 		
 		ObjectId id = new ObjectId();
 		
@@ -59,7 +66,24 @@ public class OnixReader {
 		List<Product> products = message.getProduct();
 		try {						
 			Marshaller marshaller = getMarshaller();
-			
+			/* this chunk of code resends the message to the output busses of addressees */
+			for (Addressee addressee : message.getHeader().getAddressee()) {
+				for(java.lang.Object temp : addressee.getContent()) {
+					if(temp instanceof AddresseeName) {
+						String organization = ((AddresseeName) temp).getValue();
+						Outlet bus = factory.getBusIfExists(organization);
+						if (bus != null) {
+							try {
+								bus.sendOnixMessage(message, marshaller);
+							} catch (Exception e) {
+								e.printStackTrace();
+							}
+							break;
+						}
+					}
+				}
+			}
+			/* parses the Notification Type and stores the message in the database */
 			StringWriter headerWriter = new StringWriter();
 			marshaller.marshal(header, headerWriter);
 			headersCollection.insert(new BasicDBObject("item", JSON.parse(headerWriter.toString())).append("_id", id));
