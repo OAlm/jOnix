@@ -73,11 +73,7 @@ public class OnixReader {
 						String organization = ((AddresseeName) temp).getValue();
 						Outlet bus = factory.getBusIfExists(organization);
 						if (bus != null) {
-							try {
-								bus.sendOnixMessage(message, marshaller);
-							} catch (Exception e) {
-								e.printStackTrace();
-							}
+							bus.sendOnixMessage(message);							
 							break;
 						}
 					}
