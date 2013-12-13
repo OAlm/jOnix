@@ -21,6 +21,15 @@ import com.mongodb.util.JSON;
 import fi.metropolia.ereading.background.BusFactory;
 import fi.metropolia.ereading.background.Outlet;
 
+/**
+ * The central class of the jOnix service. 
+ * Contains its own mongoDB pool for saving the messages in the database.
+ * Allows to send messages via POST, retrieve messages for an addressee by GET,
+ * and can show the product information with GET by product reference. In case of the need, the version is stored.
+ * With GET the history of the product changes can be retrieved.
+ * @author Artem Moskalev
+ *
+ */
 @Path("/")
 @ManagedBean
 public class OnixReader {
@@ -98,7 +107,7 @@ public class OnixReader {
 							productsCollection.remove(temp);
 						}
 					}	
-					// removes the entry which has just bee ncreated by the same query
+					// removes the entry which has just been created by the same query
 					headersCollection.remove(new BasicDBObject("_id", id)); 
 					
 				} else if (product.getNotificationType().getValue().equals("01") || product.getNotificationType().getValue().equals("02")
@@ -236,7 +245,7 @@ public class OnixReader {
 			}
 			messages.add(message);
 		}		
-		return Response.ok(new GenericEntity<List<ONIXMessage>>(messages){	}).build();
+		return Response.ok(new GenericEntity<List<ONIXMessage>>(messages){}).build();
 	}
 	
 	@GET

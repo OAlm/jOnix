@@ -2,6 +2,11 @@ package fi.metropolia.ereading.resources;
 
 import org.editeur.ns.onix._3_0.reference.*;
 
+/**
+ * Class containing a utility method for filtering the correct ONIX messages.
+ * In case the message is invalid, throws an Exception with the cause.
+ * @author Artem Moskalev
+ */
 public class MessageFilter {
 
 	public static void filter(ONIXMessage message) throws Exception {
