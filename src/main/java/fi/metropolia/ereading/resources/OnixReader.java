@@ -3,8 +3,6 @@ package fi.metropolia.ereading.resources;
 import java.io.*;
 import java.util.*;
 
-import javax.annotation.ManagedBean;
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.*;
 import javax.ws.rs.core.Response.Status;
@@ -18,9 +16,6 @@ import org.editeur.ns.onix._3_0.reference.*;
 import com.mongodb.*;
 import com.mongodb.util.JSON;
 
-import fi.metropolia.ereading.background.BusFactory;
-import fi.metropolia.ereading.background.Outlet;
-
 /**
  * The central class of the jOnix service. 
  * Contains its own mongoDB pool for saving the messages in the database.
@@ -31,13 +26,10 @@ import fi.metropolia.ereading.background.Outlet;
  *
  */
 @Path("/")
-@ManagedBean
 public class OnixReader {
-	
+		
 	private static MongoClient mongo;
 	private static JAXBContext jsonContext;
-	@Inject
-	private BusFactory factory;
 	
 	static {
 		try {
@@ -66,8 +58,12 @@ public class OnixReader {
 		} catch(Exception ex) {
 			return Response.status(Status.NOT_ACCEPTABLE).entity(ex.getMessage()).build();
 		}
-		DBCollection headersCollection = mongo.getDB("jOnix").getCollection("headers");
-		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
+		
+		DBCollection registry = mongo.getDB("jOnix").getCollection("registry");
+		DBObject organizationName = registry.findOne(new BasicDBObject("key", key));
+		
+		DBCollection headersCollection = mongo.getDB(organizationName.get("organization").toString()).getCollection("headers");
+		DBCollection productsCollection = mongo.getDB(organizationName.get("organization").toString()).getCollection("products");
 		
 		ObjectId id = new ObjectId();
 		
@@ -75,19 +71,7 @@ public class OnixReader {
 		List<Product> products = message.getProduct();
 		try {						
 			Marshaller marshaller = getMarshaller();
-			/* this chunk of code resends the message to the output busses of addressees */
-			for (Addressee addressee : message.getHeader().getAddressee()) {
-				for(java.lang.Object temp : addressee.getContent()) {
-					if(temp instanceof AddresseeName) {
-						String organization = ((AddresseeName) temp).getValue();
-						Outlet bus = factory.getBusIfExists(organization);
-						if (bus != null) {
-							bus.sendOnixMessage(message);							
-							break;
-						}
-					}
-				}
-			}
+			
 			/* parses the Notification Type and stores the message in the database */
 			StringWriter headerWriter = new StringWriter();
 			marshaller.marshal(header, headerWriter);
@@ -197,9 +181,17 @@ public class OnixReader {
 	@GET
 	@Path("/messages/addressee/{name}")
 	@Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
-	public Response getONIXMessageByAddressee(@PathParam("name") String addressee) {
-		DBCollection headersCollection = mongo.getDB("jOnix").getCollection("headers");
-		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
+	public Response getONIXMessageByAddressee(@PathParam("name") String addressee, @QueryParam("key") String privateKey) {
+		
+		if (privateKey == null || mongo.getDB("jOnix").getCollection("users").getCount(new BasicDBObject("key", privateKey)) == 0) {
+			return Response.status(Status.UNAUTHORIZED).build();
+		} 	
+		
+		DBCollection registry = mongo.getDB("jOnix").getCollection("registry");
+		DBObject organizationName = registry.findOne(new BasicDBObject("key", privateKey));
+		
+		DBCollection headersCollection = mongo.getDB(organizationName.get("organization").toString()).getCollection("headers");
+		DBCollection productsCollection = mongo.getDB(organizationName.get("organization").toString()).getCollection("products");
 
 		List<ONIXMessage> messages = new LinkedList<ONIXMessage>();
 		Unmarshaller unmarshaller = null;
@@ -251,9 +243,17 @@ public class OnixReader {
 	@GET
 	@Path("products/{reference}")
 	@Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
-	public Response getProductByReference(@PathParam("reference") String reference) {
-		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
+	public Response getProductByReference(@PathParam("reference") String reference, @QueryParam("key") String privateKey) {
 		
+		if (privateKey == null || mongo.getDB("jOnix").getCollection("users").getCount(new BasicDBObject("key", privateKey)) == 0) {
+			return Response.status(Status.UNAUTHORIZED).build();
+		} 	
+		
+		DBCollection registry = mongo.getDB("jOnix").getCollection("registry");
+		DBObject organizationName = registry.findOne(new BasicDBObject("key", privateKey));
+				
+		DBCollection productsCollection = mongo.getDB(organizationName.get("organization").toString()).getCollection("products");
+				
 		DBCursor productRecord = productsCollection.find(new BasicDBObject("item.Product.RecordReference", reference))
 												   .sort(new BasicDBObject("VERSION", -1)).limit(1);
 		if (productRecord.hasNext()) {
@@ -271,8 +271,16 @@ public class OnixReader {
 	@GET
 	@Path("products/{reference}/history")
 	@Produces({MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON})
-	public Response getProductByReferenceWithHistory(@PathParam("reference") String reference) {
-		DBCollection productsCollection = mongo.getDB("jOnix").getCollection("products");
+	public Response getProductByReferenceWithHistory(@PathParam("reference") String reference, @QueryParam("key") String privateKey) {
+		
+		if (privateKey == null || mongo.getDB("jOnix").getCollection("users").getCount(new BasicDBObject("key", privateKey)) == 0) {
+			return Response.status(Status.UNAUTHORIZED).build();
+		} 	
+		
+		DBCollection registry = mongo.getDB("jOnix").getCollection("registry");
+		DBObject organizationName = registry.findOne(new BasicDBObject("key", privateKey));
+				
+		DBCollection productsCollection = mongo.getDB(organizationName.get("organization").toString()).getCollection("products");
 		
 		DBCursor productRecords = productsCollection.find(new BasicDBObject("item.Product.RecordReference", reference))
 													.sort(new BasicDBObject("VERSION", -1));
